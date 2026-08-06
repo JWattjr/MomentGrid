@@ -1,0 +1,20 @@
+# Secrets
+.env
+.env.local
+**/.env
+**/.env.local
+!.env.example
+!**/.env.example
+
+# Dependencies and generated output
+**/node_modules/
+web/.next/
+web/.vercel/
+contracts/cache/
+contracts/out/
+.tools/
+
+# Logs and editor noise
+*.log
+.DS_Store
+Thumbs.db

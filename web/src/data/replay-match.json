@@ -1,0 +1,21 @@
+[
+  { "minute": 4.2, "eventType": "HOME_SHOT" },
+  { "minute": 8.8, "eventType": "CORNER" },
+  { "minute": 12.5, "eventType": "HOME_SHOT" },
+  { "minute": 17.4, "eventType": "HOME_GOAL" },
+  { "minute": 24.1, "eventType": "YELLOW_CARD" },
+  { "minute": 28.6, "eventType": "CORNER" },
+  { "minute": 32.3, "eventType": "AWAY_SHOT" },
+  { "minute": 37.2, "eventType": "VAR_REVIEW" },
+  { "minute": 41.7, "eventType": "YELLOW_CARD" },
+  { "minute": 47.5, "eventType": "AWAY_GOAL" },
+  { "minute": 54.1, "eventType": "SUBSTITUTION" },
+  { "minute": 58.4, "eventType": "CORNER" },
+  { "minute": 63.2, "eventType": "SUBSTITUTION" },
+  { "minute": 68.5, "eventType": "SUBSTITUTION" },
+  { "minute": 71.3, "eventType": "PENALTY_AWARDED" },
+  { "minute": 76.1, "eventType": "YELLOW_CARD" },
+  { "minute": 82.4, "eventType": "HOME_GOAL" },
+  { "minute": 85.6, "eventType": "SUBSTITUTE_GOAL", "team": "home" },
+  { "minute": 88.2, "eventType": "RED_CARD" }
+]
