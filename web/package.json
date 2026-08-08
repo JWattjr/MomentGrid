@@ -3,13 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3003",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@moment-grid/scoring": "workspace:*",
     "@fontsource-variable/geist": "^5.3.0",
     "@fontsource/archivo-black": "^5.3.0",
     "@fontsource/ibm-plex-mono": "^5.3.0",
@@ -32,7 +33,6 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.12",
     "tailwindcss": "^4",
-    "typescript": "^5",
-    "vitest": "^4.1.10"
+    "typescript": "^5"
   }
 }

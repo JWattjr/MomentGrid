@@ -4,8 +4,8 @@ import { LockKeyhole, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { Address, isAddress } from "viem";
 import { useAccount, usePublicClient, useWriteContract } from "wagmi";
+import { PredictionId } from "@moment-grid/scoring";
 import { encryptGrid } from "@/lib/inco-grid";
-import { PredictionId } from "@/lib/match-source";
 
 const gameAbi = [
   {

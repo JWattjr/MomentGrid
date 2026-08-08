@@ -38,7 +38,7 @@ export function MomentNav() {
   return (
     <nav className="moment-nav" aria-label="Moment Grid pages">
       {NAV_ITEMS.map((item, index) => {
-        const active = item.href === "/" ? pathname === "/" || pathname === "/club" : pathname.startsWith(item.href);
+        const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
         return (
           <Link className={active ? "is-active" : ""} href={item.href} key={item.href}>
             <span>0{index + 1}</span>{item.label}

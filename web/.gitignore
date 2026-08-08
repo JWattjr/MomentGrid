@@ -32,6 +32,9 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# ...but the template must be committed; without this negation the pattern above
+# silently swallows it and the documented setup file never lands in the repo.
+!.env.example
 
 # vercel
 .vercel

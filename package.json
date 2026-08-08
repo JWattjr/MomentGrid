@@ -1,0 +1,17 @@
+{
+  "name": "moment-grid",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.15.1",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "pnpm --filter @moment-grid/scoring build && pnpm -r --filter=!@moment-grid/scoring build",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "dev:web": "pnpm --filter web dev",
+    "dev:api": "pnpm --filter api start:dev",
+    "typecheck": "pnpm -r typecheck"
+  }
+}

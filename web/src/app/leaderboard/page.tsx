@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Crown, LockKeyhole, Trophy } from "lucide-react";
+import { LiveLeaderboard } from "@/components/live-leaderboard";
 import { PrototypeShell } from "@/components/prototype-shell";
 
 export const metadata: Metadata = {
@@ -29,19 +30,21 @@ export default function LeaderboardPage() {
         <div className="podium-place place-three"><span>03</span><strong>0x91…D40</strong><b>2 lines</b></div>
       </section>
 
-      <section className="rank-card">
-        <header><span>Rank</span><span>Player</span><span>Lines</span><span>Fragments</span></header>
-        {PLAYERS.map((player) => (
-          <div className={player.name === "You" ? "is-you" : ""} key={player.rank}>
-            <b>#{String(player.rank).padStart(2, "0")}</b>
-            <strong><i className={`avatar-dot tone-${player.tone}`} />{player.name}</strong>
-            <span>{player.lines}</span>
-            <span>+{player.fragments}</span>
-          </div>
-        ))}
-      </section>
+      <LiveLeaderboard>
+        <section className="rank-card">
+          <header><span>Rank</span><span>Player</span><span>Lines</span><span>Fragments</span></header>
+          {PLAYERS.map((player) => (
+            <div className={player.name === "You" ? "is-you" : ""} key={player.rank}>
+              <b>#{String(player.rank).padStart(2, "0")}</b>
+              <strong><i className={`avatar-dot tone-${player.tone}`} />{player.name}</strong>
+              <span>{player.lines}</span>
+              <span>+{player.fragments}</span>
+            </div>
+          ))}
+        </section>
 
-      <div className="prototype-note"><Trophy size={15} /><span><strong>UI preview only.</strong> Your partner can connect settlement data after the core contract flow is ready.</span></div>
+        <div className="prototype-note"><Trophy size={15} /><span><strong>Preview standings.</strong> Set <code>NEXT_PUBLIC_API_URL</code> to read real results indexed from settled rounds.</span></div>
+      </LiveLeaderboard>
     </PrototypeShell>
   );
 }

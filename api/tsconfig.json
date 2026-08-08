@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "declaration": false,
+    "removeComments": false,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "target": "ES2022",
+    "sourceMap": true,
+    "outDir": "./dist",
+    "baseUrl": "./",
+    "incremental": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "strictNullChecks": true,
+    "noImplicitAny": true,
+    "forceConsistentCasingInFileNames": true,
+    "esModuleInterop": true,
+    // "node" resolution ignores export maps, which is what keeps viem's
+    // CommonJS build importable from a CJS Nest process. The cost is that
+    // subpath exports stop resolving for types, so the one subpath we use is
+    // mapped by hand. Node still resolves it normally at runtime.
+    "moduleResolution": "node",
+    "paths": {
+      "@inco/lightning-js/lite": ["./node_modules/@inco/lightning-js/dist/types/lite/index.d.ts"]
+    }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

@@ -31,7 +31,8 @@ import {
   PREDICTIONS,
   PredictionId,
   scoreGrid,
-} from "@/lib/match-source";
+} from "@moment-grid/scoring";
+import { useMatchSource } from "@/lib/use-match-source";
 import { ConfidentialSubmitButton } from "./confidential-submit-button";
 import { MegapotClaimButton } from "./megapot-claim-button";
 import { MomentHeader, MomentNav } from "./moment-chrome";
@@ -44,7 +45,6 @@ const SCREEN_ORDER: Screen[] = ["build", "lock", "watch", "reveal", "reward"];
 const TIER_NAMES = ["Common", "Medium", "Rare"];
 const TIER_CODES = ["C", "M", "R"];
 const WINDOW_LABELS = ["0–30", "30–60", "60–90+"];
-const REPLAY_SECONDS = Number(process.env.NEXT_PUBLIC_REPLAY_SECONDS ?? 120);
 
 const LINE_PATHS = [
   { cells: [0, 1, 2], d: "M 16.667 16.667 L 83.333 16.667" },
@@ -69,34 +69,11 @@ const QUICK_GRID: PredictionId[] = [
   "GOAL_AFTER_80",
 ];
 
-const EMPTY_REPLAY: MatchSnapshot = {
-  phase: "idle",
-  startedAt: null,
-  durationSeconds: REPLAY_SECONDS,
-  elapsedSeconds: 0,
-  remainingSeconds: REPLAY_SECONDS,
-  progress: 0,
-  virtualMinute: 0,
-  events: [],
-};
-
-async function replayRequest(action?: "start" | "reset") {
-  const response = await fetch("/api/replay", {
-    method: action ? "POST" : "GET",
-    headers: action ? { "Content-Type": "application/json" } : undefined,
-    body: action ? JSON.stringify({ action, durationSeconds: REPLAY_SECONDS }) : undefined,
-    cache: "no-store",
-  });
-  if (!response.ok) throw new Error("Replay keeper is unavailable.");
-  return (await response.json()) as MatchSnapshot;
-}
-
-export function GameShell({ visualTheme = "poster" }: { visualTheme?: "poster" | "club" }) {
+export function GameShell() {
   const [screen, setScreen] = useState<Screen>("build");
   const [grid, setGrid] = useState<Grid>(() => Array(9).fill(null));
   const [pickerCell, setPickerCell] = useState<number | null>(null);
-  const [snapshot, setSnapshot] = useState<MatchSnapshot>(EMPTY_REPLAY);
-  const [replayError, setReplayError] = useState("");
+  const { snapshot, error: replayError, start: startMatch, reset: resetMatch } = useMatchSource();
   const [revealed, setRevealed] = useState(false);
   const [fragments, setFragments] = useState(0);
   const [feedbackEnabled, setFeedbackEnabled] = useState(true);
@@ -177,18 +154,6 @@ export function GameShell({ visualTheme = "poster" }: { visualTheme?: "poster" |
 
   const handleEventFeedback = useCallback(() => playFeedback("event"), [playFeedback]);
 
-  useEffect(() => {
-    if (screen !== "watch" || snapshot.phase === "complete") return;
-    const poll = window.setInterval(async () => {
-      try {
-        setSnapshot(await replayRequest());
-      } catch (error) {
-        setReplayError(error instanceof Error ? error.message : "Replay failed.");
-      }
-    }, 800);
-    return () => window.clearInterval(poll);
-  }, [screen, snapshot.phase]);
-
   const selectPrediction = (prediction: PredictionId) => {
     if (pickerCell === null) return;
     playFeedback("tap");
@@ -198,13 +163,8 @@ export function GameShell({ visualTheme = "poster" }: { visualTheme?: "poster" |
 
   const startRound = async () => {
     playFeedback("lock");
-    setReplayError("");
-    try {
-      setSnapshot(await replayRequest("start"));
-      setScreen("watch");
-    } catch (error) {
-      setReplayError(error instanceof Error ? error.message : "Replay failed.");
-    }
+    await startMatch();
+    setScreen("watch");
   };
 
   const commitReward = useCallback(() => {
@@ -221,17 +181,15 @@ export function GameShell({ visualTheme = "poster" }: { visualTheme?: "poster" |
 
   const playAgain = async () => {
     playFeedback("tap");
-    await replayRequest("reset").catch(() => undefined);
+    await resetMatch();
     rewardCommitted.current = false;
     setGrid(Array(9).fill(null));
-    setSnapshot(EMPTY_REPLAY);
     setRevealed(false);
-    setReplayError("");
     setScreen("build");
   };
 
   return (
-    <main className={`app-stage theme-${visualTheme}`}>
+    <main className="app-stage theme-club">
       <div className="ambient ambient-one" />
       <div className="ambient ambient-two" />
       <section className="phone-shell">

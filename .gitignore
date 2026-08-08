@@ -12,9 +12,16 @@ web/.next/
 web/.vercel/
 contracts/cache/
 contracts/out/
+# Deployment run logs. forge writes resolved sender addresses and, in cache/,
+# values it labels sensitive.
+contracts/broadcast/
 .tools/
 
 # Logs and editor noise
 *.log
 .DS_Store
 Thumbs.db
+api/dist/
+docs
+shared/scoring/dist
+api/scripts
