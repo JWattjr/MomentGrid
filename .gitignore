@@ -10,6 +10,7 @@
 **/node_modules/
 web/.next/
 web/.vercel/
+.vercel/
 contracts/cache/
 contracts/out/
 # Deployment run logs. forge writes resolved sender addresses and, in cache/,
