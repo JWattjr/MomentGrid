@@ -1241,6 +1241,58 @@ h1 { color: var(--ink); font-size: clamp(31px,8.7vw,39px); line-height: .98; let
 .theme-club .wallet-button.is-wrong-chain .wallet-status {
   background: #ff315e;
 }
+.theme-club .chain-lock.chain-lock-primary {
+  gap: 10px;
+  padding: 11px;
+  background: var(--paper);
+}
+.theme-club .chain-lock.chain-lock-primary > div {
+  color: var(--ink);
+  font-size: 8px;
+  letter-spacing: .25px;
+}
+.theme-club .chain-lock.chain-lock-primary .onchain-lock-button {
+  min-height: 52px;
+  color: var(--ink);
+  border: 3px solid var(--ink);
+  background: var(--gold);
+  box-shadow: 4px 4px 0 var(--ink);
+  font-family: "IBM Plex Mono",ui-monospace,monospace;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .25px;
+  text-transform: uppercase;
+}
+.theme-club .chain-lock.chain-lock-primary .onchain-lock-button:not(:disabled):hover {
+  transform: translate(-1px,-1px);
+  box-shadow: 5px 5px 0 var(--ink);
+}
+.theme-club .chain-lock.chain-lock-primary .onchain-lock-button:not(:disabled):active {
+  transform: translate(4px,4px) scale(.97);
+  box-shadow: 0 0 0 var(--ink);
+}
+.theme-club .chain-lock.chain-lock-primary .onchain-lock-button:disabled {
+  color: #65697a;
+  background: #c9c4b6;
+  cursor: not-allowed;
+}
+.theme-club .guest-replay-button {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 2px;
+  color: rgba(245,240,222,.78);
+  border: 0;
+  border-bottom: 1px dashed rgba(245,240,222,.5);
+  background: transparent;
+  font-family: "IBM Plex Mono",ui-monospace,monospace;
+  font-size: 8px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.theme-club .guest-replay-button:hover { color: var(--paper); }
+.theme-club .guest-replay-button:active { transform: scale(.95); }
 .theme-club .text-button:not(:disabled):active,
 .theme-club .back-button:not(:disabled):active {
   transform: scale(.9) rotate(-2deg);

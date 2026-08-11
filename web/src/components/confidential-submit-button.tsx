@@ -50,12 +50,12 @@ const storeAbi = [{
   outputs: [{ name: "", type: "uint256" }],
 }] as const;
 
-export function ConfidentialSubmitButton({ grid }: { grid: PredictionId[] }) {
+export function ConfidentialSubmitButton({ grid, onConfirmed }: { grid: PredictionId[]; onConfirmed: () => Promise<void> | void }) {
   const { address, chainId, isConnected } = useAccount();
   const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
   const { mutateAsync: switchChainAsync, isPending: isSwitching } = useSwitchChain();
-  const [status, setStatus] = useState<"idle" | "encrypting" | "submitting" | "confirmed">("idle");
+  const [status, setStatus] = useState<"idle" | "encrypting" | "submitting" | "starting" | "confirmed">("idle");
   const [error, setError] = useState("");
 
   const gameAddress = process.env.NEXT_PUBLIC_MOMENT_GRID_ADDRESS;
@@ -63,13 +63,33 @@ export function ConfidentialSubmitButton({ grid }: { grid: PredictionId[] }) {
   const configuredRound = process.env.NEXT_PUBLIC_ROUND_ID;
   const configured = isAddress(gameAddress ?? "") && isAddress(storeAddress ?? "") && Boolean(configuredRound);
 
-  if (!configured || !isConnected || !address) return null;
+  if (!configured) {
+    return (
+      <div className="chain-lock chain-lock-primary">
+        <div><ShieldCheck size={15} /><span>Onchain round unavailable</span></div>
+        <button className="onchain-lock-button" disabled>
+          <LockKeyhole size={14} /> Round configuration required
+        </button>
+      </div>
+    );
+  }
+
+  if (!isConnected || !address) {
+    return (
+      <div className="chain-lock chain-lock-primary">
+        <div><ShieldCheck size={15} /><span>Base Sepolia · encrypted entry</span></div>
+        <button className="onchain-lock-button" disabled>
+          <LockKeyhole size={14} /> Connect wallet above to lock & play
+        </button>
+      </div>
+    );
+  }
 
   if (chainId !== baseSepolia.id) {
     return (
-      <div className="chain-lock">
+      <div className="chain-lock chain-lock-primary">
         <div><ShieldCheck size={15} /><span>Base Sepolia required</span></div>
-        <button onClick={() => void switchChainAsync({ chainId: baseSepolia.id })} disabled={isSwitching}>
+        <button className="onchain-lock-button" onClick={() => void switchChainAsync({ chainId: baseSepolia.id })} disabled={isSwitching}>
           <LockKeyhole size={14} />
           {isSwitching ? "Switching network…" : "Switch to Base Sepolia"}
         </button>
@@ -102,6 +122,8 @@ export function ConfidentialSubmitButton({ grid }: { grid: PredictionId[] }) {
         value: round.entryFee + storeFee,
       });
       await publicClient.waitForTransactionReceipt({ hash });
+      setStatus("starting");
+      await onConfirmed();
       setStatus("confirmed");
     } catch (caught) {
       setStatus("idle");
@@ -110,11 +132,19 @@ export function ConfidentialSubmitButton({ grid }: { grid: PredictionId[] }) {
   };
 
   return (
-    <div className="chain-lock">
-      <div><ShieldCheck size={15} /><span>Base Sepolia round {configuredRound}</span></div>
-      <button onClick={submit} disabled={status !== "idle"}>
+    <div className="chain-lock chain-lock-primary">
+      <div><ShieldCheck size={15} /><span>Base Sepolia round {configuredRound} · encrypted entry</span></div>
+      <button className="onchain-lock-button pulse-button" onClick={submit} disabled={status !== "idle"}>
         <LockKeyhole size={14} />
-        {status === "confirmed" ? "Grid confirmed onchain" : status === "encrypting" ? "Encrypting picks…" : status === "submitting" ? "Confirming transaction…" : "Submit confidential grid"}
+        {status === "confirmed"
+          ? "Grid confirmed onchain"
+          : status === "encrypting"
+            ? "Encrypting predictions…"
+            : status === "submitting"
+              ? "Confirm transaction in wallet…"
+              : status === "starting"
+                ? "Confirmed · starting match…"
+                : "Lock on Base Sepolia & start match"}
       </button>
       {error && <p>{error}</p>}
     </div>

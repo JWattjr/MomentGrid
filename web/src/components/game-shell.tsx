@@ -397,9 +397,9 @@ function LockScreen({ grid, error, onBack, onLock }: { grid: PredictionId[]; err
       </div>
       <GridBoard grid={grid} locked />
       <div className="lock-card"><div className="lock-icon"><LockKeyhole size={20} /></div><div><strong>Private until reveal</strong><p>No one can copy popular grids before the match begins.</p></div></div>
-      <ConfidentialSubmitButton grid={grid} />
+      <ConfidentialSubmitButton grid={grid} onConfirmed={onLock} />
       {error && <p className="error-message">{error}</p>}
-      <button className="primary-button pulse-button" onClick={onLock}>Lock & start replay <LockKeyhole size={17} /></button>
+      <button className="guest-replay-button" onClick={onLock}>Skip blockchain · play guest demo <ChevronRight size={15} /></button>
     </div>
   );
 }
