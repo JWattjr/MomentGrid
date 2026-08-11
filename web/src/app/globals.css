@@ -1233,6 +1233,14 @@ h1 { color: var(--ink); font-size: clamp(31px,8.7vw,39px); line-height: .98; let
   transform: translate(4px,4px) scale(.96);
   box-shadow: 0 0 0 var(--ink);
 }
+.theme-club .wallet-button.is-wrong-chain {
+  color: var(--ink);
+  background: #ffda45;
+  border-color: var(--ink);
+}
+.theme-club .wallet-button.is-wrong-chain .wallet-status {
+  background: #ff315e;
+}
 .theme-club .text-button:not(:disabled):active,
 .theme-club .back-button:not(:disabled):active {
   transform: scale(.9) rotate(-2deg);

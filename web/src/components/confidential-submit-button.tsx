@@ -3,7 +3,8 @@
 import { LockKeyhole, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { Address, isAddress } from "viem";
-import { useAccount, usePublicClient, useWriteContract } from "wagmi";
+import { useAccount, usePublicClient, useSwitchChain, useWriteContract } from "wagmi";
+import { baseSepolia } from "wagmi/chains";
 import { PredictionId } from "@moment-grid/scoring";
 import { encryptGrid } from "@/lib/inco-grid";
 
@@ -50,9 +51,10 @@ const storeAbi = [{
 }] as const;
 
 export function ConfidentialSubmitButton({ grid }: { grid: PredictionId[] }) {
-  const { address, isConnected } = useAccount();
+  const { address, chainId, isConnected } = useAccount();
   const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
+  const { mutateAsync: switchChainAsync, isPending: isSwitching } = useSwitchChain();
   const [status, setStatus] = useState<"idle" | "encrypting" | "submitting" | "confirmed">("idle");
   const [error, setError] = useState("");
 
@@ -62,6 +64,18 @@ export function ConfidentialSubmitButton({ grid }: { grid: PredictionId[] }) {
   const configured = isAddress(gameAddress ?? "") && isAddress(storeAddress ?? "") && Boolean(configuredRound);
 
   if (!configured || !isConnected || !address) return null;
+
+  if (chainId !== baseSepolia.id) {
+    return (
+      <div className="chain-lock">
+        <div><ShieldCheck size={15} /><span>Base Sepolia required</span></div>
+        <button onClick={() => void switchChainAsync({ chainId: baseSepolia.id })} disabled={isSwitching}>
+          <LockKeyhole size={14} />
+          {isSwitching ? "Switching network…" : "Switch to Base Sepolia"}
+        </button>
+      </div>
+    );
+  }
 
   const submit = async () => {
     if (!publicClient || status !== "idle") return;
