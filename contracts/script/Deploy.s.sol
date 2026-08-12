@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.29;
 
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Script} from "forge-std/Script.sol";
 import {console2} from "forge-std/console2.sol";
 import {IGridStore} from "../src/interfaces/IGridStore.sol";
@@ -23,6 +24,7 @@ contract BroadcasterFinder {
 abstract contract DeploymentBase is Script {
     struct NetworkConfig {
         string networkName;
+        address entryToken;
         address megapot;
         address megapotToken;
         uint256 ticketPrice;
@@ -31,23 +33,26 @@ abstract contract DeploymentBase is Script {
 
     uint256 internal constant BASE_SEPOLIA = 84532;
 
-    function getDeploymentConfig()
-        internal
-        view
-        returns (NetworkConfig memory config)
-    {
+    /// Circle's canonical USDC on Base Sepolia, six decimals. Entry fees, the
+    /// pot and every payout are denominated in it.
+    address internal constant BASE_SEPOLIA_USDC = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;
+
+    function getDeploymentConfig() internal view returns (NetworkConfig memory config) {
         if (block.chainid == BASE_SEPOLIA) {
             config = NetworkConfig({
                 networkName: "Base Sepolia",
+                entryToken: vm.envOr("ENTRY_TOKEN", BASE_SEPOLIA_USDC),
                 megapot: 0x6f03c7BCaDAdBf5E6F5900DA3d56AdD8FbDac5De,
                 megapotToken: 0xA4253E7C13525287C56550b8708100f93E60509f,
                 ticketPrice: 1_000_000,
                 configureMegapot: true
             });
         } else {
-            // Anvil and anything else: Megapot does not exist locally
+            // Anvil and anything else: Megapot does not exist locally, and there
+            // is no canonical USDC, so ENTRY_TOKEN must name a deployed token.
             config = NetworkConfig({
                 networkName: "Local / unconfigured network",
+                entryToken: vm.envOr("ENTRY_TOKEN", address(0)),
                 megapot: address(0),
                 megapotToken: address(0),
                 ticketPrice: 1_000_000,
@@ -63,13 +68,19 @@ abstract contract DeploymentBase is Script {
         vm.stopBroadcast();
     }
 
-    function _finish(
-        IGridStore store,
-        address deployer,
-        NetworkConfig memory config
-    ) internal returns (MomentGrid game) {
+    function _finish(IGridStore store, address deployer, NetworkConfig memory config)
+        internal
+        returns (MomentGrid game)
+    {
+        // Fail before deploying rather than leaving a game nobody can enter:
+        // the entry token is immutable, so a zero address here is unrecoverable.
+        if (config.entryToken == address(0)) {
+            revert("ENTRY_TOKEN is not set. Export the ERC20 the pot is denominated in before deploying.");
+        }
+
         console2.log("Deploying MomentGrid...");
-        game = new MomentGrid(store, deployer);
+        console2.log("  Entry token:", config.entryToken);
+        game = new MomentGrid(store, IERC20(config.entryToken), deployer);
         console2.log("MomentGrid deployed at:", address(game));
 
         console2.log("\nWiring up contract permissions...");
@@ -78,18 +89,11 @@ abstract contract DeploymentBase is Script {
 
         if (config.configureMegapot) {
             address referrer = vm.envOr("MEGAPOT_REFERRER", address(0));
-            game.configureMegapot(
-                config.megapot,
-                config.megapotToken,
-                referrer,
-                config.ticketPrice
-            );
+            game.configureMegapot(config.megapot, config.megapotToken, referrer, config.ticketPrice);
             console2.log("Megapot configured. Referrer:", referrer);
         } else {
             console2.log("WARNING: Megapot not configured on this network.");
-            console2.log(
-                "         Call configureMegapot() from the owner once addresses are known."
-            );
+            console2.log("         Call configureMegapot() from the owner once addresses are known.");
         }
     }
 
@@ -99,20 +103,27 @@ abstract contract DeploymentBase is Script {
         address game,
         address deployer,
         NetworkConfig memory config
-    ) internal pure {
+    ) internal view {
         console2.log("\n=== Deployment Summary ===");
         console2.log("Network:", config.networkName);
         console2.log("\n--- Contract Addresses ---");
         console2.log(storeLabel, store);
         console2.log("MomentGrid:", game);
+        console2.log("Entry token:", config.entryToken);
         console2.log("\n--- Configuration ---");
         console2.log("Owner / Keeper:", deployer);
+        console2.log("Deployment block:", block.number);
         console2.log("\n--- Copy into api/.env ---");
         console2.log("INCO_GRID_STORE_ADDRESS=", store);
         console2.log("MOMENT_GRID_ADDRESS=", game);
+        console2.log("ENTRY_TOKEN_ADDRESS=", config.entryToken);
+        // The indexer starts here rather than at the chain head, so the very
+        // first RoundCreated and GridSubmitted events are not missed.
+        console2.log("INDEXER_START_BLOCK=", block.number);
         console2.log("\n--- Copy into web/.env.local ---");
         console2.log("NEXT_PUBLIC_INCO_GRID_STORE_ADDRESS=", store);
         console2.log("NEXT_PUBLIC_MOMENT_GRID_ADDRESS=", game);
+        console2.log("NEXT_PUBLIC_ENTRY_TOKEN_ADDRESS=", config.entryToken);
         console2.log("\n=== Deployment Complete ===");
     }
 }
@@ -141,13 +152,7 @@ contract DeployInco is DeploymentBase {
         game = _finish(store, deployer, config);
         vm.stopBroadcast();
 
-        _logSummary(
-            "IncoGridStore:",
-            address(store),
-            address(game),
-            deployer,
-            config
-        );
+        _logSummary("IncoGridStore:", address(store), address(game), deployer, config);
     }
 }
 
@@ -156,10 +161,7 @@ contract DeployInco is DeploymentBase {
 contract DeployPlaintext is DeploymentBase {
     function setUp() public {}
 
-    function run()
-        external
-        returns (PlaintextGridStore store, MomentGrid game)
-    {
+    function run() external returns (PlaintextGridStore store, MomentGrid game) {
         NetworkConfig memory config = getDeploymentConfig();
 
         console2.log("=== Moment Grid Deployment (PLAINTEXT DEBUG) ===");
@@ -178,12 +180,6 @@ contract DeployPlaintext is DeploymentBase {
         game = _finish(store, deployer, config);
         vm.stopBroadcast();
 
-        _logSummary(
-            "PlaintextGridStore:",
-            address(store),
-            address(game),
-            deployer,
-            config
-        );
+        _logSummary("PlaintextGridStore:", address(store), address(game), deployer, config);
     }
 }

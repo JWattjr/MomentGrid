@@ -1,0 +1,25 @@
+{
+  "name": "@moment-grid/demo-tools",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "create-round": "tsx src/create-round.ts",
+    "seed-bots": "tsx src/seed-bots.ts",
+    "new-demo-round": "tsx src/new-demo-round.ts",
+    "grids": "tsx src/show-grids.ts",
+    "preflight": "tsx src/preflight.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@moment-grid/inco": "workspace:*",
+    "@moment-grid/scoring": "workspace:*",
+    "viem": "^2.55.10"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
+  }
+}

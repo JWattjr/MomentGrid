@@ -28,6 +28,17 @@ export class Entry {
 
   @Prop({ type: Boolean, default: null })
   eligible!: boolean | null;
+
+  /// What this round paid the player, in the entry token's base units, stored
+  /// as a decimal string because the values are bigints. Null until the round
+  /// settles; "0" means settled and won nothing, which is a different fact.
+  @Prop({ type: String, default: null })
+  payoutAmount!: string | null;
+
+  /// True when the payout was a returned stake rather than a share of the pot,
+  /// which happens when no grid in the round qualified.
+  @Prop({ type: Boolean, default: null })
+  refunded!: boolean | null;
 }
 
 export const EntrySchema = SchemaFactory.createForClass(Entry);

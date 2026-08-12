@@ -26,3 +26,5 @@ api/dist/
 docs
 shared/scoring/dist
 api/scripts
+shared/inco/dist
+.pnpm-store

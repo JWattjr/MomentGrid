@@ -1,5 +1,7 @@
 import { Inject, Injectable, Logger, ServiceUnavailableException } from "@nestjs/common";
 import { Lightning } from "@inco/lightning-js/lite";
+import { encryptGrid } from "@moment-grid/inco";
+import { PredictionId, TIER_POOLS } from "@moment-grid/scoring";
 import {
   Address,
   createPublicClient,
@@ -11,12 +13,33 @@ import {
   toHex,
   WalletClient,
 } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
+import { mnemonicToAccount, privateKeyToAccount } from "viem/accounts";
 import { baseSepolia } from "viem/chains";
 import { AppConfig, CONFIG } from "../config/configuration";
-import { gridStoreAbi, momentGridAbi } from "./abis";
+import { erc20Abi, gridStoreAbi, momentGridAbi } from "./abis";
 
 export type EventWindows = readonly [bigint, bigint, bigint];
+
+const ZERO_BYTES32 = `0x${"0".repeat(64)}` as Hex;
+
+/// A legal, deterministic opponent grid. It is deliberately independent of
+/// the player's grid, which remains encrypted and never reaches the API.
+const DEMO_BOT_GRID: PredictionId[] = [
+  "GOAL_FIRST_30",
+  "GOAL_30_60",
+  "CARD_AFTER_75",
+  "GOAL_BEFORE_20",
+  "BOTH_SCORE_BY_60",
+  "GOAL_AFTER_75",
+  "AWAY_LEADS_30",
+  "SUBSTITUTE_GOAL_BY_60",
+  "SUBSTITUTE_GOAL_AFTER_60",
+];
+
+const BOT_GAS_RESERVE = 2_000_000_000_000_000n; // 0.002 ETH
+// Base caps transaction gas at 16,777,216. Keep encrypted input submissions
+// below that cap so the RPC does not reject viem's gas limit before inclusion.
+const SUBMIT_GRID_GAS_LIMIT = 16_500_000n;
 
 /// Thin wrapper over the two contracts and the Inco reveal client.
 ///
@@ -30,7 +53,21 @@ export class ChainService {
   private walletClient?: WalletClient;
   private lightning?: Awaited<ReturnType<typeof Lightning.baseSepoliaTestnet>>;
 
+  /// Serialises every keeper transaction. All writes sign from one account, so
+  /// two overlapping callers — the automatic keeper locking a round while a
+  /// manual settlement runs, say — would build both transactions against the
+  /// same nonce and one would be dropped. Nothing here queues reads.
+  private writeQueue: Promise<unknown> = Promise.resolve();
+
   constructor(@Inject(CONFIG) private readonly config: AppConfig) {}
+
+  private enqueueWrite<T>(work: () => Promise<T>): Promise<T> {
+    // Chain onto the tail regardless of how the previous write finished; a
+    // failed settlement must not wedge the queue for everything after it.
+    const result = this.writeQueue.then(work, work);
+    this.writeQueue = result.catch(() => undefined);
+    return result;
+  }
 
   get isConfigured(): boolean {
     return this.config.chain !== undefined;
@@ -59,6 +96,16 @@ export class ChainService {
       transport: http(rpcUrl),
     });
     return this.walletClient;
+  }
+
+  private writerFor(account: ReturnType<typeof mnemonicToAccount>): WalletClient {
+    const { rpcUrl } = this.chain();
+    return createWalletClient({ account, chain: baseSepolia, transport: http(rpcUrl) });
+  }
+
+  private async waitForSuccess(hash: Hex, label: string): Promise<void> {
+    const receipt = await this.reader().waitForTransactionReceipt({ hash });
+    if (receipt.status !== "success") throw new Error(`${label} reverted on chain (tx ${hash}).`);
   }
 
   private async incoClient() {
@@ -99,41 +146,70 @@ export class ChainService {
     const account = privateKeyToAccount(this.chain().keeperPrivateKey);
     const transactions: Hex[] = [];
 
-    const prepareHash = await this.writer().writeContract({
-      account,
-      chain: baseSepolia,
-      address: gridStoreAddress,
-      abi: gridStoreAbi,
-      functionName: "prepareScore",
-      args: [roundId, player, events],
-    });
-    await this.reader().waitForTransactionReceipt({ hash: prepareHash });
-    transactions.push(prepareHash);
-
-    const handle = await this.reader().readContract({
+    // Settlement can be retried after an RPC/Inco failure. prepareScore is
+    // intentionally one-shot, so resume from an existing encrypted score
+    // instead of submitting prepareScore a second time.
+    let handle = await this.reader().readContract({
       address: gridStoreAddress,
       abi: gridStoreAbi,
       functionName: "encryptedScoreHandle",
       args: [roundId, player],
     });
 
+    if (handle === ZERO_BYTES32) {
+      const prepareHash = await this.enqueueWrite(() =>
+        this.writer().writeContract({
+          account,
+          chain: baseSepolia,
+          address: gridStoreAddress,
+          abi: gridStoreAbi,
+          functionName: "prepareScore",
+          args: [roundId, player, events],
+        }),
+      );
+      await this.reader().waitForTransactionReceipt({ hash: prepareHash });
+      transactions.push(prepareHash);
+      handle = await this.reader().readContract({
+        address: gridStoreAddress,
+        abi: gridStoreAbi,
+        functionName: "encryptedScoreHandle",
+        args: [roundId, player],
+      });
+    }
+
+    const resolved = await this.reader().readContract({
+      address: gridStoreAddress,
+      abi: gridStoreAbi,
+      functionName: "resolvedScore",
+      args: [roundId, player],
+    });
+    if (resolved.ready) {
+      this.logger.log(`Score for ${player} in round ${roundId} was already resolved; resuming settlement.`);
+      return transactions;
+    }
+
+    // Deliberately outside the write queue: fetching the attested reveal is a
+    // network round-trip to Inco's covalidators, and holding the transaction
+    // lock across it would stall every other keeper write for its duration.
     const lightning = await this.incoClient();
     const [result] = await lightning.attestedReveal([handle]);
     const signatures = result.covalidatorSignatures.map((signature: Uint8Array | Hex) => toHex(signature));
 
-    const resolveHash = await this.writer().writeContract({
-      account,
-      chain: baseSepolia,
-      address: gridStoreAddress,
-      abi: gridStoreAbi,
-      functionName: "submitScoreDecryption",
-      args: [
-        roundId,
-        player,
-        { handle: result.handle, value: toHex(result.plaintext.value, { size: 32 }) },
-        signatures,
-      ],
-    });
+    const resolveHash = await this.enqueueWrite(() =>
+      this.writer().writeContract({
+        account,
+        chain: baseSepolia,
+        address: gridStoreAddress,
+        abi: gridStoreAbi,
+        functionName: "submitScoreDecryption",
+        args: [
+          roundId,
+          player,
+          { handle: result.handle, value: toHex(result.plaintext.value, { size: 32 }) },
+          signatures,
+        ],
+      }),
+    );
     await this.reader().waitForTransactionReceipt({ hash: resolveHash });
     transactions.push(resolveHash);
 
@@ -143,16 +219,28 @@ export class ChainService {
 
   async settleRound(roundId: bigint, events: EventWindows): Promise<Hex> {
     const account = privateKeyToAccount(this.chain().keeperPrivateKey);
-    const hash = await this.writer().writeContract({
-      account,
-      chain: baseSepolia,
-      address: this.chain().momentGridAddress,
-      abi: momentGridAbi,
-      functionName: "settleRound",
-      args: [roundId, events],
-    });
+    const hash = await this.enqueueWrite(() =>
+      this.writer().writeContract({
+        account,
+        chain: baseSepolia,
+        address: this.chain().momentGridAddress,
+        abi: momentGridAbi,
+        functionName: "settleRound",
+        args: [roundId, events],
+      }),
+    );
     await this.reader().waitForTransactionReceipt({ hash });
     return hash;
+  }
+
+  /// The most recently created round. `roundCount` is incremented by
+  /// `createRound`, so it always equals the highest round ID in existence.
+  async latestRoundId(): Promise<bigint> {
+    return this.reader().readContract({
+      address: this.chain().momentGridAddress,
+      abi: momentGridAbi,
+      functionName: "roundCount",
+    });
   }
 
   async latestBlock(): Promise<bigint> {
@@ -195,17 +283,173 @@ export class ChainService {
     return logs as unknown as Log[];
   }
 
+  async createRound(entryFee: bigint = 1_000_000n): Promise<{ roundId: bigint; txHash: Hex }> {
+    const pools = TIER_POOLS as readonly [bigint, bigint, bigint];
+    const account = privateKeyToAccount(this.chain().keeperPrivateKey);
+    const txHash = await this.enqueueWrite(() =>
+      this.writer().writeContract({
+        account,
+        chain: baseSepolia,
+        address: this.chain().momentGridAddress,
+        abi: momentGridAbi,
+        functionName: "createRound",
+        args: [0n, entryFee, [pools[0], pools[1], pools[2]]],
+      }),
+    );
+    await this.reader().waitForTransactionReceipt({ hash: txHash });
+    const roundId = await this.latestRoundId();
+    this.logger.log(`Created new round ${roundId} on chain (${txHash})`);
+    return { roundId, txHash };
+  }
+
+  /// Ensures the automatic demo opponent has entered an open round. The bot
+  /// uses the same Inco encryption helper as the browser and is funded from
+  /// the keeper only when it is short of the round entry fee or gas reserve.
+  async seedDemoBot(roundId: bigint): Promise<Address> {
+    const config = this.chain();
+    if (!config.demoBotMnemonic) throw new Error("DEMO_BOT_MNEMONIC is required to seed the demo bot.");
+
+    const bot = mnemonicToAccount(config.demoBotMnemonic, { addressIndex: 0 });
+    const game = config.momentGridAddress;
+    const [round, storeFee, alreadyEntered] = await Promise.all([
+      this.reader().readContract({ address: game, abi: momentGridAbi, functionName: "roundDetails", args: [roundId] }),
+      this.reader().readContract({
+        address: config.gridStoreAddress,
+        abi: gridStoreAbi,
+        functionName: "submissionFee",
+      }),
+      this.reader().readContract({ address: game, abi: momentGridAbi, functionName: "hasEntered", args: [roundId, bot.address] }),
+    ]);
+
+    if (alreadyEntered) return bot.address;
+    if (round.state !== 0) throw new Error(`Cannot seed bot into round ${roundId}: entry is closed.`);
+
+    const token = config.entryTokenAddress ??
+      await this.reader().readContract({ address: game, abi: momentGridAbi, functionName: "entryToken" });
+    const [botEth, botTokens] = await Promise.all([
+      this.reader().getBalance({ address: bot.address }),
+      this.reader().readContract({ address: token, abi: erc20Abi, functionName: "balanceOf", args: [bot.address] }),
+    ]);
+
+    if (botEth < storeFee + BOT_GAS_RESERVE) {
+      const hash = await this.enqueueWrite(() =>
+        this.writer().sendTransaction({
+          account: privateKeyToAccount(config.keeperPrivateKey),
+          chain: baseSepolia,
+          to: bot.address,
+          value: storeFee + BOT_GAS_RESERVE - botEth,
+        }),
+      );
+      await this.waitForSuccess(hash, "bot gas funding");
+    }
+
+    if (botTokens < round.entryFee) {
+      const hash = await this.enqueueWrite(() =>
+        this.writer().writeContract({
+          account: privateKeyToAccount(config.keeperPrivateKey),
+          chain: baseSepolia,
+          address: token,
+          abi: erc20Abi,
+          functionName: "transfer",
+          args: [bot.address, round.entryFee - botTokens],
+        }),
+      );
+      await this.waitForSuccess(hash, "bot USDC funding");
+    }
+
+    const botWriter = this.writerFor(bot);
+    const allowance = await this.reader().readContract({
+      address: token,
+      abi: erc20Abi,
+      functionName: "allowance",
+      args: [bot.address, game],
+    });
+    if (allowance < round.entryFee) {
+      const hash = await this.enqueueWrite(() =>
+        botWriter.writeContract({
+          account: bot,
+          chain: baseSepolia,
+          address: token,
+          abi: erc20Abi,
+          functionName: "approve",
+          args: [game, round.entryFee],
+        }),
+      );
+      await this.waitForSuccess(hash, "bot USDC approval");
+    }
+
+    const encrypted = await encryptGrid({
+      grid: DEMO_BOT_GRID,
+      accountAddress: bot.address,
+      gridStoreAddress: config.gridStoreAddress,
+      rpcUrl: config.rpcUrl,
+    });
+    const submitHash = await this.enqueueWrite(() =>
+      botWriter.writeContract({
+        account: bot,
+        chain: baseSepolia,
+        address: game,
+        abi: momentGridAbi,
+        functionName: "submitGrid",
+        args: [roundId, encrypted],
+        value: storeFee,
+        gas: SUBMIT_GRID_GAS_LIMIT,
+      }),
+    );
+    await this.waitForSuccess(submitHash, "bot grid submission");
+    this.logger.log(`Automatically seeded demo bot ${bot.address} into round ${roundId}`);
+    return bot.address;
+  }
+
   async lockRound(roundId: bigint): Promise<Hex> {
     const account = privateKeyToAccount(this.chain().keeperPrivateKey);
-    const hash = await this.writer().writeContract({
-      account,
-      chain: baseSepolia,
-      address: this.chain().momentGridAddress,
-      abi: momentGridAbi,
-      functionName: "lockRound",
-      args: [roundId],
-    });
+    const hash = await this.enqueueWrite(() =>
+      this.writer().writeContract({
+        account,
+        chain: baseSepolia,
+        address: this.chain().momentGridAddress,
+        abi: momentGridAbi,
+        functionName: "lockRound",
+        args: [roundId],
+      }),
+    );
     await this.reader().waitForTransactionReceipt({ hash });
     return hash;
+  }
+
+  /// A player's total unwithdrawn balance across every round.
+  async claimableOf(player: Address): Promise<bigint> {
+    return this.reader().readContract({
+      address: this.chain().momentGridAddress,
+      abi: momentGridAbi,
+      functionName: "claimable",
+      args: [player],
+    });
+  }
+
+  /// Lines, eligibility, this round's payout and the running claimable total in
+  /// one call — the fallback when the indexer has not caught up yet.
+  async roundOutcomeOf(
+    roundId: bigint,
+    player: Address,
+  ): Promise<{ lines: number; eligible: boolean; amount: bigint; claimableTotal: bigint }> {
+    const [lines, eligible, amount, claimableTotal] = await this.reader().readContract({
+      address: this.chain().momentGridAddress,
+      abi: momentGridAbi,
+      functionName: "roundOutcomeOf",
+      args: [roundId, player],
+    });
+    return { lines: Number(lines), eligible, amount, claimableTotal };
+  }
+
+  /// Entrant count and state in one read, for the keeper's decision loop.
+  async roundSnapshot(roundId: bigint): Promise<{ state: number; entrantCount: number }> {
+    const round = await this.reader().readContract({
+      address: this.chain().momentGridAddress,
+      abi: momentGridAbi,
+      functionName: "roundDetails",
+      args: [roundId],
+    });
+    return { state: round.state, entrantCount: Number(round.entrantCount) };
   }
 }

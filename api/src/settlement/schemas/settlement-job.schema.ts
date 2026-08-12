@@ -5,6 +5,11 @@ export type SettlementJobDocument = HydratedDocument<SettlementJob>;
 
 export type SettlementStatus = "running" | "complete" | "failed";
 
+/// Where a running settlement has got to. The confidential path takes two
+/// transactions per player plus an Inco round-trip, so this is what turns a
+/// 30-60 second wait on the reward screen into visible progress.
+export type SettlementStage = "scoring" | "revealing" | "settling" | "complete" | "failed";
+
 /// Replaces the in-process boolean the old Next.js route used as a lock.
 ///
 /// The unique index on `roundId` is the lock: two concurrent settlement
@@ -17,6 +22,23 @@ export class SettlementJob {
 
   @Prop({ type: String, required: true, enum: ["running", "complete", "failed"], default: "running" })
   status!: SettlementStatus;
+
+  @Prop({
+    type: String,
+    required: true,
+    enum: ["scoring", "revealing", "settling", "complete", "failed"],
+    default: "scoring",
+  })
+  stage!: SettlementStage;
+
+  @Prop({ default: 0 })
+  playersResolved!: number;
+
+  @Prop({ default: 0 })
+  playersTotal!: number;
+
+  @Prop({ type: Date, default: null })
+  startedAt!: Date | null;
 
   @Prop({ type: [String], default: [] })
   eventsByWindow!: string[];

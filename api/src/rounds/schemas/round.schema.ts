@@ -14,11 +14,19 @@ export class Round {
   @Prop({ type: String, required: true, enum: ["open", "locked", "settled"], default: "open" })
   state!: "open" | "locked" | "settled";
 
+  /// Base units of the entry token, not wei. USDC has six decimals, so
+  /// "1000000" is one dollar. Named `Amount` rather than `Wei` because a
+  /// six-decimal value in a field called wei invites an off-by-1e12 bug.
   @Prop({ required: true, default: "0" })
-  entryFeeWei!: string;
+  entryFeeAmount!: string;
 
   @Prop({ required: true, default: "0" })
-  potWei!: string;
+  potAmount!: string;
+
+  /// The ERC20 the pot is denominated in, recorded per round so a historical
+  /// round still reads correctly after a redeploy changes the token.
+  @Prop({ type: String, default: null })
+  entryToken!: string | null;
 
   @Prop({ type: [String], default: [] })
   tierPools!: string[];

@@ -208,6 +208,68 @@ h1 { margin: 0; color: #f2f8ed; font-size: clamp(29px, 8vw, 36px); line-height: 
 .payout-card small { color: #6f8378; font-size: 7px; }
 .replay-footnote { margin: -5px 0 0; color: #52645a; font-size: 7px; }
 
+/* --- money path: real payout, settlement progress, balances --------------- */
+
+/* The payout card carries the headline result, so it changes shape from the
+   original label/value row into a block with figures underneath. */
+.onchain-result { display: flex; flex-direction: column; gap: 9px; }
+.payout-card.payout-won,
+.payout-card.payout-lost,
+.payout-card.payout-neutral { flex-direction: column; align-items: stretch; gap: 11px; }
+.payout-card.payout-won { border-color: rgba(84,226,160,.42); background: rgba(84,226,160,.06); }
+.payout-card.payout-lost { border-color: rgba(255,124,124,.34); background: rgba(255,124,124,.05); }
+.payout-card.payout-neutral { border-color: rgba(140,160,180,.3); background: rgba(140,160,180,.04); }
+
+.payout-head { display: flex; align-items: flex-start; gap: 10px; text-align: left; }
+.payout-head > div { display: flex; flex-direction: column; gap: 3px; }
+.payout-head strong { font-size: 13px; line-height: 1.25; }
+.payout-head small { color: #90a49a; font-size: 8px; line-height: 1.4; }
+.payout-icon { display: grid; place-items: center; width: 30px; height: 30px; flex: 0 0 30px; border-radius: 9px; background: rgba(255,255,255,.06); }
+.payout-won .payout-icon { color: #54e2a0; background: rgba(84,226,160,.13); }
+.payout-lost .payout-icon { color: #ff8f8f; background: rgba(255,124,124,.12); }
+
+.payout-figures { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; margin: 0; padding-top: 9px; border-top: 1px solid rgba(255,255,255,.07); }
+.payout-figures > div { display: flex; flex-direction: column; gap: 2px; text-align: left; }
+.payout-figures dt { color: #6f8378; font-size: 7px; text-transform: uppercase; letter-spacing: .6px; }
+.payout-figures dd { margin: 0; font-size: 9px; font-weight: 800; }
+.payout-figures .payout-net dd { color: #54e2a0; }
+.payout-lost .payout-figures .payout-net dd { color: #ff8f8f; }
+
+/* Settlement takes 30-60s. These stages are the most interesting thing the
+   project does, so they get room rather than a spinner. */
+.settlement-stages { display: flex; flex-direction: column; gap: 8px; }
+.settlement-stage { display: flex; align-items: flex-start; gap: 8px; text-align: left; }
+.settlement-stage > span:last-child { display: flex; flex-direction: column; gap: 2px; }
+.settlement-stage b { font-size: 9px; font-weight: 750; }
+.settlement-stage small { color: #7d9188; font-size: 7px; }
+.settlement-icon { display: grid; place-items: center; width: 18px; height: 18px; flex: 0 0 18px; border-radius: 50%; background: rgba(255,255,255,.05); }
+.settlement-icon i { width: 5px; height: 5px; border-radius: 50%; background: rgba(255,255,255,.22); }
+.settlement-stage.is-waiting b { color: #66786e; }
+.settlement-stage.is-active .settlement-icon { color: #8fcfe0; background: rgba(88,217,255,.14); }
+.settlement-stage.is-done .settlement-icon { color: #54e2a0; background: rgba(84,226,160,.14); }
+.settlement-stage.is-failed .settlement-icon { color: #ff8f8f; background: rgba(255,124,124,.14); }
+.is-spinning { animation: settlement-spin 1s linear infinite; }
+@keyframes settlement-spin { to { transform: rotate(360deg); } }
+
+.settlement-transactions { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,.07); }
+.settlement-transactions a,
+.settlement-link { display: inline-flex; align-items: center; gap: 4px; color: #8fcfe0; font-family: var(--font-mono, monospace); font-size: 7px; text-decoration: none; }
+.settlement-transactions a:hover,
+.settlement-link:hover { text-decoration: underline; }
+
+/* The balance moving is the demo. It appears before staking and again after
+   settlement, so it needs to read clearly at a glance. */
+.usdc-balance-badge { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid rgba(255,255,255,.09); border-radius: 10px; color: #b9cdc3; }
+.usdc-balance-badge > span { display: flex; flex-direction: column; gap: 1px; text-align: left; }
+.usdc-balance-badge small { color: #6f8378; font-size: 7px; text-transform: uppercase; letter-spacing: .6px; }
+.usdc-balance-badge strong { font-size: 11px; font-variant-numeric: tabular-nums; }
+
+.chain-lock-note { display: block; color: #6f8378; font-size: 7px; line-height: 1.45; text-align: left; }
+
+@media (prefers-reduced-motion: reduce) {
+  .is-spinning { animation: none; }
+}
+
 .picker-backdrop { position: fixed; z-index: 30; inset: 0; display: flex; align-items: flex-end; justify-content: center; padding: 0; background: rgba(1,5,3,.72); backdrop-filter: blur(6px); animation: fade-in .2s both; }
 .picker-sheet { width: min(100%,440px); padding: 9px 18px max(24px,env(safe-area-inset-bottom)); border: 1px solid #25362e; border-bottom: 0; border-radius: 22px 22px 0 0; background: #0c1813; box-shadow: 0 -20px 80px rgba(0,0,0,.35); animation: sheet-in .3s cubic-bezier(.2,.8,.2,1) both; }
 .picker-handle { width: 34px; height: 3px; margin: 0 auto 16px; border-radius: 3px; background: #3b4c43; }

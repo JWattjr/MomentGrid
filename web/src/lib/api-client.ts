@@ -1,4 +1,5 @@
 import type { MatchSnapshot } from "@moment-grid/scoring";
+import type { RoundOutcome } from "./round-outcome";
 
 /// The API is optional. When `NEXT_PUBLIC_API_URL` is unset the app runs in
 /// guest mode entirely in the browser, which is what keeps the replay playable
@@ -57,4 +58,30 @@ export type PlayerSummary = {
 
 export const playersApi = {
   summary: (address: string) => request<PlayerSummary>(`/players/${address}`),
+};
+
+export const roundsApi = {
+  /// The latest round, auto-discovered from chain by the API. Called at runtime
+  /// so the web no longer needs a build-time env var for the round id.
+  current: () => request<{ roundId: string }>("/rounds/current"),
+
+  /// One player's result for one round: won or lost, what they are owed, and
+  /// how far settlement has got. Derived server-side so the browser never has
+  /// to reimplement what counts as a win.
+  outcome: (roundId: string, address: string) =>
+    request<RoundOutcome>(`/rounds/${roundId}/outcome/${address}`),
+};
+
+export type SettlementProgress = {
+  roundId: string;
+  status: "running" | "complete" | "failed";
+  stage: "scoring" | "revealing" | "settling" | "complete" | "failed";
+  playersResolved: number;
+  playersTotal: number;
+  transactions: string[];
+  error: string | null;
+};
+
+export const settlementApi = {
+  progress: (roundId: string) => request<SettlementProgress>(`/settlement/${roundId}`),
 };

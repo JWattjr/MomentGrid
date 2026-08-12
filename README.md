@@ -15,10 +15,10 @@ Requires Node 20+, [pnpm](https://pnpm.io) and [Foundry](https://getfoundry.sh).
 ```bash
 pnpm install
 pnpm --filter @moment-grid/scoring build
-pnpm --filter web dev
+pnpm dev:web
 ```
 
-Open `http://localhost:3000`. **No wallet, no API, no database.** The replay runs entirely in the
+Open `http://localhost:3003`. **No wallet, no API, no database.** The replay runs entirely in the
 browser, which is the whole point of guest mode: a judge can play the game before configuring
 anything.
 
@@ -63,24 +63,24 @@ and never accepts them from a caller.
 cp web/.env.example web/.env.local
 cp api/.env.example api/.env          # set MONGODB_URI and KEEPER_API_SECRET
 
-pnpm --filter api start:dev           # http://localhost:4000
-pnpm --filter web dev                 # http://localhost:3000
+pnpm dev:api                          # http://localhost:4000
+pnpm dev:web                          # http://localhost:3003
 ```
+
+For an on-chain demo, also set `DEMO_BOT_MNEMONIC` in `api/.env`. With keeper
+automation enabled, the API derives one throwaway bot wallet, funds it from the
+keeper when necessary, encrypts its grid, and enters it into every open round.
+No bot-seeding command is required.
 
 Set `NEXT_PUBLIC_API_URL` in `web/.env.local` to point the front end at the API. Leave it unset and
 the app falls back to guest mode.
 
 ### Settling a round
 
-Once a match reports `complete`:
-
-```bash
-cd api
-node --env-file=.env scripts/settle-round.mjs 1
-```
-
-The script prints the derived window bitmaps and every transaction hash: prepare and attested reveal
-per player, then the settle call.
+Once a match reports `complete`, the API keeper automatically performs the prepare, attested reveal,
+and settle transactions for every entrant. It then opens the next round and automatically seeds the
+configured demo bot. The manual settlement endpoint is only a recovery tool when keeper automation
+has been disabled or exhausted its retries.
 
 ## Verify
 

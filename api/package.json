@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@inco/lightning-js": "^1.0.2",
+    "@moment-grid/inco": "workspace:*",
     "@moment-grid/scoring": "workspace:*",
     "@nestjs/common": "^11.1.6",
     "@nestjs/config": "^4.0.2",

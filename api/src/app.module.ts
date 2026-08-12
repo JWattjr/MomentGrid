@@ -5,12 +5,16 @@ import { ChainService } from "./chain/chain.service";
 import { IndexerService } from "./chain/indexer.service";
 import { IndexerCheckpoint, IndexerCheckpointSchema } from "./chain/schemas/indexer-checkpoint.schema";
 import { AppConfig, CONFIG, loadConfiguration } from "./config/configuration";
+import { KeeperController } from "./keeper/keeper.controller";
+import { RoundKeeperService } from "./keeper/round-keeper.service";
+import { KeeperTask, KeeperTaskSchema } from "./keeper/schemas/keeper-task.schema";
 import { MatchController } from "./match/match.controller";
 import { MatchService } from "./match/match.service";
 import { Match, MatchSchema } from "./match/schemas/match.schema";
 import { PlayersController } from "./players/players.controller";
 import { PlayersService } from "./players/players.service";
 import { Player, PlayerSchema } from "./players/schemas/player.schema";
+import { RoundOutcomeService } from "./rounds/round-outcome.service";
 import { RoundsController } from "./rounds/rounds.controller";
 import { RoundsService } from "./rounds/rounds.service";
 import { Entry, EntrySchema } from "./rounds/schemas/entry.schema";
@@ -44,16 +48,25 @@ class AppConfigModule {}
       { name: Player.name, schema: PlayerSchema },
       { name: SettlementJob.name, schema: SettlementJobSchema },
       { name: IndexerCheckpoint.name, schema: IndexerCheckpointSchema },
+      { name: KeeperTask.name, schema: KeeperTaskSchema },
     ]),
   ],
-  controllers: [MatchController, RoundsController, PlayersController, SettlementController],
+  controllers: [
+    MatchController,
+    RoundsController,
+    PlayersController,
+    SettlementController,
+    KeeperController,
+  ],
   providers: [
     MatchService,
     RoundsService,
+    RoundOutcomeService,
     PlayersService,
     SettlementService,
     ChainService,
     IndexerService,
+    RoundKeeperService,
     KeeperGuard,
   ],
 })

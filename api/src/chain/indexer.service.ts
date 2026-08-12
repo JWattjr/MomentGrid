@@ -6,6 +6,7 @@ import { AppConfig, CONFIG } from "../config/configuration";
 import { PlayersService } from "../players/players.service";
 import { RoundsService } from "../rounds/rounds.service";
 import { ChainService } from "./chain.service";
+import { projectLog, Projection } from "./log-projection";
 import { IndexerCheckpoint, IndexerCheckpointDocument } from "./schemas/indexer-checkpoint.schema";
 
 const CHECKPOINT_KEY = "moment-grid-events";
@@ -28,6 +29,7 @@ export class IndexerService implements OnModuleInit, OnModuleDestroy {
   private timer?: NodeJS.Timeout;
   private running = false;
   private stopped = false;
+  private warnedAboutCheckpoint = false;
 
   constructor(
     private readonly chain: ChainService,
@@ -87,12 +89,40 @@ export class IndexerService implements OnModuleInit, OnModuleDestroy {
   /// head — scanning an entire chain from genesis would be pointless and slow.
   private async readCheckpoint(head: bigint): Promise<bigint> {
     const existing = await this.checkpointModel.findOne({ key: CHECKPOINT_KEY }).exec();
-    if (existing) return BigInt(existing.lastBlock);
+
+    if (existing) {
+      const lastBlock = BigInt(existing.lastBlock);
+      const configured = this.config.indexerStartBlock;
+
+      // A stored checkpoint always wins, which makes `INDEXER_START_BLOCK` look
+      // like it does nothing after the first run. That silence has already cost
+      // one round: the indexer first ran between a round being created and a
+      // grid being submitted, so `RoundCreated` was never projected and the
+      // round is permanently missing from the read models. Say so out loud.
+      // Once per process, not once per pass: this polls every few seconds and
+      // a repeating warning would bury everything else in the log.
+      if (configured !== undefined && lastBlock > BigInt(configured) && !this.warnedAboutCheckpoint) {
+        this.warnedAboutCheckpoint = true;
+        this.logger.warn(
+          `INDEXER_START_BLOCK=${configured} is being ignored: a checkpoint already exists at block ${lastBlock}. ` +
+            `To re-index from ${configured}, delete the "${CHECKPOINT_KEY}" document from the indexer_checkpoints collection and restart.`,
+        );
+      }
+      return lastBlock;
+    }
 
     const start = this.config.indexerStartBlock !== undefined ? BigInt(this.config.indexerStartBlock) : head;
     const from = start > 0n ? start - 1n : 0n;
     await this.writeCheckpoint(from);
-    this.logger.log(`Indexer starting at block ${from + 1n}`);
+
+    if (this.config.indexerStartBlock === undefined) {
+      this.logger.warn(
+        `Indexer starting at the chain head (block ${from + 1n}). Events already on chain will not be indexed - ` +
+          `set INDEXER_START_BLOCK to the deployment block to backfill.`,
+      );
+    } else {
+      this.logger.log(`Indexer starting at block ${from + 1n}`);
+    }
     return from;
   }
 
@@ -109,55 +139,39 @@ export class IndexerService implements OnModuleInit, OnModuleDestroy {
         args?: Record<string, unknown>;
         transactionHash?: string;
       };
-      if (!decoded.eventName || !decoded.args) continue;
 
-      switch (decoded.eventName) {
-        case "RoundCreated":
-          await this.rounds.upsertRound(String(decoded.args.roundId), {
-            state: "open",
-            entryFeeWei: String(decoded.args.entryFee ?? "0"),
-          });
-          break;
-
-        case "RoundLocked":
-          await this.rounds.upsertRound(String(decoded.args.roundId), { state: "locked" });
-          break;
-
-        case "GridSubmitted":
-          await this.rounds.recordSubmission(
-            String(decoded.args.roundId),
-            String(decoded.args.player),
-            decoded.transactionHash ?? "",
-          );
-          break;
-
-        case "PlayerScored": {
-          await this.rounds.recordScore(String(decoded.args.roundId), String(decoded.args.player), {
-            markedMask: Number(decoded.args.markedMask ?? 0),
-            completedLines: Number(decoded.args.completedLines ?? 0),
-            eligible: Boolean(decoded.args.eligible),
-          });
-          await this.syncPlayer(String(decoded.args.player));
-          break;
-        }
-
-        case "RoundSettled":
-          await this.rounds.upsertRound(String(decoded.args.roundId), {
-            state: "settled",
-            highScore: Number(decoded.args.highScore ?? 0),
-            winnerCount: Number(decoded.args.winnerCount ?? 0),
-            potWei: String(decoded.args.pot ?? "0"),
-            settledAt: new Date(),
-          });
-          break;
-
-        case "MegapotTicketPurchased":
-          await this.syncPlayer(String(decoded.args.player));
-          break;
-
-        default:
-          break;
+      for (const projection of projectLog(decoded)) {
+        await this.apply(projection);
       }
+    }
+  }
+
+  /// Writes one decoded change. Decoding lives in `projectLog`, which is pure
+  /// and unit-tested; this only knows how to persist.
+  private async apply(projection: Projection): Promise<void> {
+    switch (projection.kind) {
+      case "round":
+        await this.rounds.upsertRound(projection.roundId, projection.patch);
+        return;
+
+      case "submission":
+        await this.rounds.recordSubmission(projection.roundId, projection.player, projection.txHash);
+        return;
+
+      case "score":
+        await this.rounds.recordScore(projection.roundId, projection.player, projection.score);
+        return;
+
+      case "payout":
+        await this.rounds.recordPayout(projection.roundId, projection.player, {
+          payoutAmount: projection.amount,
+          refunded: projection.refund,
+        });
+        return;
+
+      case "playerSync":
+        await this.syncPlayer(projection.player);
+        return;
     }
   }
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MatchEvent } from "./match";
-import { gridToMomentIds, packGrid, TIER_POOLS } from "./moment-ids";
-import { PREDICTION_POOLS, PredictionId } from "./predictions";
+import { gridToMomentIds, MOMENT_IDS, packGrid, TIER_POOLS } from "./moment-ids";
+import { PREDICTION_POOLS, PREDICTIONS, PredictionId } from "./predictions";
 import { replayMatchEvents } from "./replay-fixture";
 import { eventsToWindowBitmaps, scoreGrid, scoreMomentIdsAgainstWindows } from "./scoring-bridge";
 
@@ -60,7 +60,18 @@ describe("eventsToWindowBitmaps", () => {
   });
 
   it("resolves the shipped replay fixture", () => {
-    expect(eventsToWindowBitmaps(replayMatchEvents())).toEqual([0x1c0en, 0xe030n, 0x6050180n]);
+    expect(eventsToWindowBitmaps(replayMatchEvents())).toEqual([0x81c0en, 0x180e030n, 0x6050180n]);
+  });
+
+  /// Guards the property the fixture exists to satisfy: every cell must be
+  /// winnable, or the rare row is decorative and the grid ceiling is not eight.
+  it("leaves no cell of the grid unreachable", () => {
+    const windows = eventsToWindowBitmaps(replayMatchEvents());
+    for (let cell = 0; cell < 9; cell += 1) {
+      const pool = PREDICTION_POOLS[Math.floor(cell / 3)][cell % 3];
+      const reachable = pool.some((id) => (windows[cell % 3] & (1n << BigInt(MOMENT_IDS[id]))) !== 0n);
+      expect(reachable, `cell ${cell} has no prediction that can ever hit`).toBe(true);
+    }
   });
 });
 
@@ -114,7 +125,21 @@ describe("predicate scoring and bitmap scoring agree", () => {
 
 describe("scoreGrid", () => {
   it("scores the quick grid against the replay fixture", () => {
-    expect(scoreGrid(QUICK_GRID, replayMatchEvents())).toEqual({ markedMask: 0x13f, completedLines: 4 });
+    expect(scoreGrid(QUICK_GRID, replayMatchEvents())).toEqual({ markedMask: 0x17f, completedLines: 6 });
+  });
+
+  /// The quick grid must not be the best possible grid. If a one-tap preset
+  /// ties the ceiling then no opponent can ever beat it, only draw with it, and
+  /// an equal-stake draw returns every player their exact stake.
+  it("leaves room to beat the quick grid", () => {
+    const events = replayMatchEvents();
+    const best = Array.from({ length: 9 }, (_, cell) => {
+      const pool = PREDICTION_POOLS[Math.floor(cell / 3)][cell % 3];
+      return pool.find((id) => PREDICTIONS[id].matches(events)) ?? pool[0];
+    });
+
+    expect(scoreGrid(best, events).completedLines).toBe(8);
+    expect(scoreGrid(QUICK_GRID, events).completedLines).toBeLessThan(8);
   });
 
   it("rejects a prediction placed in the wrong cell", () => {
@@ -137,6 +162,6 @@ describe("scoreMomentIdsAgainstWindows", () => {
     const momentIds = gridToMomentIds(QUICK_GRID);
     const result = scoreMomentIdsAgainstWindows(momentIds, eventsToWindowBitmaps(replayMatchEvents()));
     expect(result.validGrid).toBe(true);
-    expect(result.markedMask).toBe(0x13f);
+    expect(result.markedMask).toBe(0x17f);
   });
 });

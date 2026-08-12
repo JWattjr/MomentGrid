@@ -7,9 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
+    "@moment-grid/inco": "workspace:*",
     "@moment-grid/scoring": "workspace:*",
     "@fontsource-variable/geist": "^5.3.0",
     "@fontsource/archivo-black": "^5.3.0",
@@ -33,6 +35,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.12",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   }
 }

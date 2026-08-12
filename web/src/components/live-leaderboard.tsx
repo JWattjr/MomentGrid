@@ -3,8 +3,7 @@
 import { Trophy } from "lucide-react";
 import { useEffect, useState } from "react";
 import { isApiConfigured, leaderboardApi, type LeaderboardRow } from "@/lib/api-client";
-
-const ROUND_ID = process.env.NEXT_PUBLIC_ROUND_ID ?? "1";
+import { useCurrentRound } from "@/lib/use-current-round";
 
 const shorten = (address: string) => `${address.slice(0, 4)}…${address.slice(-3)}`;
 
@@ -20,6 +19,8 @@ type State =
 /// Falls back to the static preview below it in guest mode rather than showing
 /// an error, so the page still communicates the idea with nothing configured.
 export function LiveLeaderboard({ children }: { children: React.ReactNode }) {
+  const { roundId: activeRoundId } = useCurrentRound();
+  const roundId = activeRoundId ?? "1";
   const [state, setState] = useState<State>(() => (isApiConfigured() ? { kind: "loading" } : { kind: "guest" }));
 
   useEffect(() => {
@@ -27,7 +28,7 @@ export function LiveLeaderboard({ children }: { children: React.ReactNode }) {
     let cancelled = false;
 
     leaderboardApi
-      .forRound(ROUND_ID)
+      .forRound(roundId)
       .then((rows) => {
         if (cancelled) return;
         setState(rows.length === 0 ? { kind: "empty" } : { kind: "ready", rows });
@@ -40,12 +41,12 @@ export function LiveLeaderboard({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [roundId]);
 
   if (state.kind === "guest") return <>{children}</>;
 
   if (state.kind === "loading") {
-    return <div className="prototype-note"><span>Loading round {ROUND_ID} standings…</span></div>;
+    return <div className="prototype-note"><span>Loading round {roundId} standings…</span></div>;
   }
 
   if (state.kind === "empty") {
@@ -53,7 +54,7 @@ export function LiveLeaderboard({ children }: { children: React.ReactNode }) {
       <div className="prototype-note">
         <Trophy size={15} />
         <span>
-          <strong>Round {ROUND_ID} is not settled yet.</strong> Standings appear once the keeper reveals every
+          <strong>Round {roundId} is not settled yet.</strong> Standings appear once the keeper reveals every
           encrypted score.
         </span>
       </div>

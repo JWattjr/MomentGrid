@@ -62,8 +62,10 @@ export class SettlementService {
     }
     if (existing?.status === "failed") {
       existing.status = "running";
+      existing.stage = "scoring";
       existing.error = null;
       existing.transactions = [];
+      existing.playersResolved = 0;
       existing.eventsByWindow = windows.map(String);
       return existing.save();
     }
@@ -94,13 +96,30 @@ export class SettlementService {
       }
       this.assertAddresses(players);
 
+      // Stage is written between steps so the reward screen can show what is
+      // happening during the Inco round-trip instead of an opaque spinner.
+      job.stage = "scoring";
+      job.playersTotal = players.length;
+      job.playersResolved = 0;
+      job.startedAt = new Date();
+      await job.save();
+
       const transactions: string[] = [];
       for (const player of players) {
         transactions.push(...(await this.chain.resolvePlayerScore(roundId, player, windows)));
+        job.stage = "revealing";
+        job.playersResolved += 1;
+        job.transactions = transactions;
+        await job.save();
       }
+
+      job.stage = "settling";
+      await job.save();
+
       transactions.push(await this.chain.settleRound(roundId, windows));
 
       job.status = "complete";
+      job.stage = "complete";
       job.players = players;
       job.transactions = transactions;
       job.finishedAt = new Date();
@@ -116,6 +135,7 @@ export class SettlementService {
       };
     } catch (error) {
       job.status = "failed";
+      job.stage = "failed";
       job.error = error instanceof Error ? error.message : "Settlement failed.";
       job.finishedAt = new Date();
       await job.save();

@@ -1,0 +1,23 @@
+{
+  "name": "@moment-grid/inco",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@inco/lightning-js": "^1.0.2",
+    "@moment-grid/scoring": "workspace:*",
+    "viem": "^2.55.10"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

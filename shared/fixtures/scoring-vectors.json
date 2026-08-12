@@ -21,12 +21,12 @@
         25
       ],
       "windows": [
-        "0x1c0e",
-        "0xe030",
+        "0x81c0e",
+        "0x180e030",
         "0x6050180"
       ],
-      "mask": 319,
-      "lines": 4,
+      "mask": 383,
+      "lines": 6,
       "valid": true
     },
     {
@@ -65,12 +65,12 @@
         25
       ],
       "windows": [
-        "0x1c0e",
-        "0xe030",
+        "0x81c0e",
+        "0x180e030",
         "0x6050180"
       ],
-      "mask": 319,
-      "lines": 4,
+      "mask": 383,
+      "lines": 6,
       "valid": true
     },
     {

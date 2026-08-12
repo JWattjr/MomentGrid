@@ -7,7 +7,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "pnpm --filter @moment-grid/scoring build && pnpm -r --filter=!@moment-grid/scoring build",
+    "build": "pnpm --filter \"./shared/*\" build && pnpm -r --filter=\"!./shared/*\" build",
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
     "dev:web": "pnpm --filter web dev",

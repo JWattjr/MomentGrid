@@ -21,18 +21,28 @@ export class SettlementController {
     return this.settlement.settle(roundId, body.matchId);
   }
 
+  /// Deliberately unguarded, unlike the POST above.
+  ///
+  /// The confidential path takes two transactions per player plus an Inco
+  /// round-trip, so the reward screen polls this to show progress instead of an
+  /// opaque spinner. Nothing here is private: round id, status, entrant
+  /// addresses, transaction hashes and window bitmaps are all already public on
+  /// Base Sepolia. Triggering a settlement stays keeper-only.
   @Get(":roundId")
-  @UseGuards(KeeperGuard)
   async job(@Param("roundId") roundId: string) {
     const job = await this.settlement.jobFor(roundId);
     if (!job) throw new NotFoundException(`No settlement has been attempted for round ${roundId}.`);
     return {
       roundId: job.roundId,
       status: job.status,
+      stage: job.stage,
+      playersResolved: job.playersResolved,
+      playersTotal: job.playersTotal,
       eventsByWindow: job.eventsByWindow,
       players: job.players,
       transactions: job.transactions,
       error: job.error,
+      startedAt: job.startedAt,
       finishedAt: job.finishedAt,
     };
   }

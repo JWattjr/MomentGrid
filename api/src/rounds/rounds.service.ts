@@ -58,6 +58,18 @@ export class RoundsService {
       .exec();
   }
 
+  /// Records what a settlement paid one player. Set rather than incremented, so
+  /// re-indexing the same log cannot inflate a payout.
+  async recordPayout(
+    roundId: string,
+    player: string,
+    payout: { payoutAmount: string; refunded: boolean },
+  ): Promise<void> {
+    await this.entryModel
+      .updateOne({ roundId, player: player.toLowerCase() }, { $set: payout }, { upsert: true })
+      .exec();
+  }
+
   stateName(state: number): (typeof STATE_NAMES)[number] {
     return STATE_NAMES[state] ?? "open";
   }
