@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
-  "installCommand": "pnpm install --filter web... --filter @moment-grid/scoring... --frozen-lockfile",
-  "buildCommand": "pnpm --filter @moment-grid/scoring build && pnpm --filter web build",
+  "installCommand": "pnpm install --filter web... --filter @moment-grid/inco... --filter @moment-grid/scoring... --frozen-lockfile",
+  "buildCommand": "pnpm --filter @moment-grid/scoring build && pnpm --filter @moment-grid/inco build && pnpm --filter web build",
   "outputDirectory": ".next"
 }
