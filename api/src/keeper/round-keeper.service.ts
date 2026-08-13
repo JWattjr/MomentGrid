@@ -172,6 +172,17 @@ export class RoundKeeperService implements OnModuleInit, OnModuleDestroy {
         this.chain.roundSnapshot(BigInt(roundId)),
       ]);
 
+      // The tracked round may have been settled manually or by another API
+      // instance after this keeper exhausted its own retries. Rediscover from
+      // chain instead of remaining pinned to that terminal round forever; the
+      // discovery path also makes sure the demo bot enters the active round.
+      if (round.state === ROUND_STATE.settled) {
+        this.roundId = undefined;
+        this.settlementAttempts = 0;
+        await this.ensureActiveRound();
+        return;
+      }
+
       if (round.state === ROUND_STATE.open && !(await this.ensureBot(roundId))) return;
 
       if (snapshot.phase === "running" && round.state === ROUND_STATE.open && round.entrantCount > 0) {

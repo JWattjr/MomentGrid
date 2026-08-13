@@ -50,6 +50,7 @@ type Options = {
   chainConfigured?: boolean;
   settleImpl?: () => Promise<unknown>;
   existingJob?: { status: string } | null;
+  demoBotConfigured?: boolean;
 };
 
 function makeKeeper(options: Options = {}) {
@@ -68,6 +69,7 @@ function makeKeeper(options: Options = {}) {
     })),
     lockRound: vi.fn(async () => "0xlock"),
     createRound: vi.fn(async () => ({ roundId: BigInt(ROUND_ID + 1), txHash: "0xcreate" })),
+    seedDemoBot: vi.fn(async () => "0xbot"),
   } as unknown as ChainService;
 
   const settlement = {
@@ -81,6 +83,7 @@ function makeKeeper(options: Options = {}) {
       pollMs: 2_000,
       maxRetries: options.maxRetries ?? 3,
     },
+    ...(options.demoBotConfigured ? { chain: { demoBotMnemonic: "configured" } } : {}),
   } as AppConfig;
 
   const keeper = new RoundKeeperService(chain, matches, settlement, taskModel as never, config);
@@ -108,6 +111,24 @@ describe("RoundKeeperService auto-creation", () => {
     expect(settlement.settle).toHaveBeenCalledWith(String(ROUND_ID));
     expect(chain.createRound).toHaveBeenCalled();
     expect(keeper.status().roundId).toBe(ROUND_ID + 1);
+  });
+
+  it("moves off an externally settled round and seeds the latest open round", async () => {
+    const { keeper, chain, matches } = makeKeeper({ phase: "idle", demoBotConfigured: true });
+    await keeper.tick();
+    vi.mocked(chain.seedDemoBot).mockClear();
+
+    vi.mocked(chain.latestRoundId).mockResolvedValue(BigInt(ROUND_ID + 1));
+    vi.mocked(chain.roundSnapshot).mockImplementation(async (roundId) => ({
+      state: roundId === BigInt(ROUND_ID) ? ROUND_STATE.settled : ROUND_STATE.open,
+      entrantCount: 1,
+    }));
+
+    await keeper.tick();
+
+    expect(keeper.status().roundId).toBe(ROUND_ID + 1);
+    expect(chain.seedDemoBot).toHaveBeenCalledWith(BigInt(ROUND_ID + 1));
+    expect(matches.status).toHaveBeenCalledTimes(2);
   });
 });
 

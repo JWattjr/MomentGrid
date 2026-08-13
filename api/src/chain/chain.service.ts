@@ -326,10 +326,11 @@ export class ChainService {
 
     const token = config.entryTokenAddress ??
       await this.reader().readContract({ address: game, abi: momentGridAbi, functionName: "entryToken" });
-    const [botEth, botTokens] = await Promise.all([
+    const [botEth, initialBotTokens] = await Promise.all([
       this.reader().getBalance({ address: bot.address }),
       this.reader().readContract({ address: token, abi: erc20Abi, functionName: "balanceOf", args: [bot.address] }),
     ]);
+    let botTokens = initialBotTokens;
 
     if (botEth < storeFee + BOT_GAS_RESERVE) {
       const hash = await this.enqueueWrite(() =>
@@ -344,17 +345,30 @@ export class ChainService {
     }
 
     if (botTokens < round.entryFee) {
-      const hash = await this.enqueueWrite(() =>
-        this.writer().writeContract({
-          account: privateKeyToAccount(config.keeperPrivateKey),
-          chain: baseSepolia,
+      try {
+        const hash = await this.enqueueWrite(() =>
+          this.writer().writeContract({
+            account: privateKeyToAccount(config.keeperPrivateKey),
+            chain: baseSepolia,
+            address: token,
+            abi: erc20Abi,
+            functionName: "transfer",
+            args: [bot.address, round.entryFee - botTokens],
+          }),
+        );
+        await this.waitForSuccess(hash, "bot USDC funding");
+      } catch (error) {
+        // Another API instance may have funded the bot while this delegated
+        // keeper transaction was rejected by the RPC's one-in-flight limit.
+        // Continue only if chain state proves the prerequisite is satisfied.
+        botTokens = await this.reader().readContract({
           address: token,
           abi: erc20Abi,
-          functionName: "transfer",
-          args: [bot.address, round.entryFee - botTokens],
-        }),
-      );
-      await this.waitForSuccess(hash, "bot USDC funding");
+          functionName: "balanceOf",
+          args: [bot.address],
+        });
+        if (botTokens < round.entryFee) throw error;
+      }
     }
 
     const botWriter = this.writerFor(bot);
@@ -396,7 +410,19 @@ export class ChainService {
         gas: SUBMIT_GRID_GAS_LIMIT,
       }),
     );
-    await this.waitForSuccess(submitHash, "bot grid submission");
+    try {
+      await this.waitForSuccess(submitHash, "bot grid submission");
+    } catch (error) {
+      // Encryption and submission are slow enough for another API instance to
+      // win the race. Its success makes this duplicate revert harmless.
+      const enteredElsewhere = await this.reader().readContract({
+        address: game,
+        abi: momentGridAbi,
+        functionName: "hasEntered",
+        args: [roundId, bot.address],
+      });
+      if (!enteredElsewhere) throw error;
+    }
     this.logger.log(`Automatically seeded demo bot ${bot.address} into round ${roundId}`);
     return bot.address;
   }
