@@ -1,6 +1,6 @@
 [build]
 builder = "railpack"
-buildCommand = "pnpm --filter @moment-grid/scoring build && pnpm --filter api build"
+buildCommand = "pnpm --filter @moment-grid/scoring build && pnpm --filter @moment-grid/inco build && pnpm --filter api build"
 
 [deploy]
 startCommand = "pnpm --filter api start:prod"
