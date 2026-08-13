@@ -97,6 +97,11 @@ export const gridStoreAbi = [
 ] as const;
 
 export const momentGridAbi = [
+  // These grid-store errors can bubble through MomentGrid.settleRound. Keep
+  // them here so viem reports the actual settlement failure instead of only
+  // returning an unknown four-byte selector.
+  { type: "error", name: "ScoreNotResolved", inputs: [] },
+  { type: "error", name: "ResultWindowsMismatch", inputs: [] },
   {
     type: "function",
     name: "submitGrid",

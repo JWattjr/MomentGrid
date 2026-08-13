@@ -167,7 +167,7 @@ export class ChainService {
           args: [roundId, player, events],
         }),
       );
-      await this.reader().waitForTransactionReceipt({ hash: prepareHash });
+      await this.waitForSuccess(prepareHash, "prepareScore");
       transactions.push(prepareHash);
       handle = await this.reader().readContract({
         address: gridStoreAddress,
@@ -210,7 +210,7 @@ export class ChainService {
         ],
       }),
     );
-    await this.reader().waitForTransactionReceipt({ hash: resolveHash });
+    await this.waitForSuccess(resolveHash, "submitScoreDecryption");
     transactions.push(resolveHash);
 
     this.logger.log(`Resolved encrypted score for ${player} in round ${roundId}`);
